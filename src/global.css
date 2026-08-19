@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Crimson+Text:ital@0;1&family=Lora:wght@400;700&display=swap");
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Lora", serif;
+  background-color: #f7f7f5;
+  color: #000;
+  line-height: 1.6;
+  padding-top: 0;
+}
+
+header + main {
+  padding-top: 112px;
+}
+
+header > div,
+main > div {
+  width: min(calc(100% - 2rem), 520px);
+  margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  body {
+    padding-top: 0;
+  }
+
+  header + main {
+    padding-top: 136px;
+  }
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Crimson Text", serif;
+  font-weight: 700;
+}
+
+@layer components {
+  .font-serif {
+    font-family: "Lora", serif;
+  }
+
+  .border-classic {
+    border: 1px solid #000;
+  }
+
+  .rounded-subtle {
+    border-radius: 4px;
+  }
+}
