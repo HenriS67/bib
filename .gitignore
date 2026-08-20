@@ -11,6 +11,7 @@ node_modules
 
 # Local PDF library
 public/books/
+public/biblio/
 
 # Workspace files accidentally present beside the project
 .bash_profile

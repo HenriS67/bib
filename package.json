@@ -16,6 +16,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:import-pdfs": "node scripts/import-pdfs.mjs",
+    "db:import-biblio": "node scripts/import-biblio.mjs",
     "db:push": "drizzle-kit push",
     "deploy": "echo 'Run \"npm run qwik add\" to install a server adapter'",
     "dev": "vite --mode ssr",
