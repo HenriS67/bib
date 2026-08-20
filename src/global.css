@@ -24,9 +24,14 @@ header + main {
 }
 
 header > div,
-main > div {
+main:not([data-admin]) > div {
   width: min(calc(100% - 2rem), 520px);
   margin-inline: auto;
+}
+
+main.admin-shell > div {
+  width: 100% !important;
+  max-width: 1800px;
 }
 
 @media (min-width: 768px) {

@@ -96,11 +96,10 @@ for (const authorFolder of authorFolders) {
 
   const authorId = slugify(authorFolder.name);
   const authorName = authorInfo.nom;
-  const authorImage = authorInfo.image || "/favicon.svg";
 
   await sql`
-    INSERT INTO authors (id, name, image)
-    VALUES (${authorId}, ${authorName}, ${authorImage})
+    INSERT INTO authors (id)
+    VALUES (${authorId})
   `;
   importedAuthors += 1;
 
@@ -119,7 +118,6 @@ for (const authorFolder of authorFolders) {
       pdfEntries.find((entry) => entry.name === bookInfo.fichier_original) ??
       pdfEntries[0];
     const pdfPath = join(bookDir, pdfEntry.name);
-    const relativePath = relative(sourceRoot, pdfPath).split(/\\|\//);
     let bookId = `${authorId}-${slugify(relative(authorPath, bookDir) || pdfEntry.name)}`;
     let suffix = 2;
     while (usedBookIds.has(bookId)) {
@@ -128,15 +126,9 @@ for (const authorFolder of authorFolders) {
     }
     usedBookIds.add(bookId);
     // encodeURI (et non encodeURIComponent) laisse la virgule intacte, ce que le serveur statique de Vite exige.
-    const pdfUrl = `/biblio/${encodeURI(relativePath.join("/"))}`;
-    const pages =
-      typeof bookInfo.nombre_pages === "number"
-        ? bookInfo.nombre_pages
-        : pageCount(pdfPath);
-
     await sql`
-      INSERT INTO books (id, title, author_id, pages, pdf_url)
-      VALUES (${bookId}, ${bookInfo.titre}, ${authorId}, ${pages}, ${pdfUrl})
+      INSERT INTO books (id, author_id)
+      VALUES (${bookId}, ${authorId})
     `;
     importedBooks += 1;
   }

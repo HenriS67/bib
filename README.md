@@ -54,8 +54,6 @@ The project includes a server-side PostgreSQL layer using Drizzle ORM. Copy `.en
 
 The initial schema contains:
 
-- `authors`: author identity and image URL
-- `books`: book metadata and a `pdf_url` pointing to the PDF storage
 
 Create or update the database schema with:
 
@@ -66,6 +64,20 @@ pnpm db:push
 For a migration-based workflow, use `pnpm db:generate` followed by `pnpm db:migrate`.
 
 PDF files should live in object storage or a protected file server. PostgreSQL should store their metadata and URL, not large PDF binaries. The database connection is server-only and must never be exposed to browser code.
+
+### Administration
+
+L'espace d'administration est disponible sur `/admin`. Il utilise les variables
+`ADMIN_USER` et `ADMIN_PASSWORD` du fichier `.env` et crée une session HTTP-only
+après connexion. Après avoir ajouté ces variables, applique la migration avec :
+
+```shell
+pnpm db:migrate
+```
+
+La première version permet de consulter le catalogue et de supprimer un livre.
+Les fichiers PDF doivent rester dans un stockage persistant ; ils ne doivent pas
+être enregistrés dans Git ni dans PostgreSQL.
 
 ### Utiliser la bibliothèque PDF
 

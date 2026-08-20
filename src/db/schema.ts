@@ -1,22 +1,10 @@
-import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const authors = pgTable("authors", {
+export const adminUsers = pgTable("admin_users", {
   id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  image: text("image").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-export const books = pgTable("books", {
-  id: text("id").primaryKey(),
-  title: text("title").notNull(),
-  authorId: text("author_id")
-    .notNull()
-    .references(() => authors.id, { onDelete: "cascade" }),
-  pages: integer("pages").notNull(),
-  pdfUrl: text("pdf_url").notNull(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

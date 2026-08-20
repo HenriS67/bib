@@ -59,8 +59,8 @@ for (const authorFolder of authorFolders) {
   );
 
   await sql`
-    INSERT INTO authors (id, name, image)
-    VALUES (${authorId}, ${authorName}, '/favicon.svg')
+    INSERT INTO authors (id)
+    VALUES (${authorId})
     ON CONFLICT (id) DO NOTHING
   `;
 
@@ -84,10 +84,7 @@ for (const authorFolder of authorFolders) {
     mkdirSync(outputDirectory, { recursive: true });
     cpSync(join(authorPath, pdfFile.name), outputPath);
 
-    await sql`
-      INSERT INTO books (id, title, author_id, pages, pdf_url)
-      VALUES (${bookId}, ${title}, ${authorId}, ${pageCount(join(authorPath, pdfFile.name))}, ${pdfUrl})
-    `;
+    await sql`INSERT INTO books (id, author_id) VALUES (${bookId}, ${authorId})`;
 
     imported += 1;
     console.log(`Ajouté : ${authorName} / ${title}`);
