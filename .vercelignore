@@ -1,0 +1,9 @@
+public/biblio/
+public/books/
+tmp/
+dist/
+**/*.pdf
+**/*.doc
+**/*.log
+**/*.csv
+**/*.txt
