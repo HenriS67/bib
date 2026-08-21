@@ -1,5 +1,5 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { mkdir, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
 
 const libraryRoot = join(process.cwd(), "public", "biblio");
 
@@ -36,6 +36,13 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+async function authorFolderForId(id: string) {
+  const entries = await readdir(libraryRoot, { withFileTypes: true });
+  return entries.find(
+    (entry) => entry.isDirectory() && slugify(entry.name) === id.toLowerCase(),
+  )?.name;
 }
 
 async function readJson<T>(filePath: string): Promise<T | null> {
@@ -141,17 +148,30 @@ export async function createAuthorFolder(id: string, name: string) {
 }
 
 export async function updateAuthorJson(id: string, name: string) {
-  const folder = join(libraryRoot, id);
+  const folderName = await authorFolderForId(id);
+  if (!folderName) throw new Error(`Dossier auteur introuvable : ${id}`);
+  const folder = join(libraryRoot, folderName);
   const current = (await readJson<AuthorJson>(join(folder, "author.json"))) || {};
   await writeFile(join(folder, "author.json"), JSON.stringify({ ...current, nom: name }, null, 2) + "\n");
 }
 
 export async function updateAuthorImageJson(id: string, image: string) {
-  const folder = join(libraryRoot, id);
+  const folderName = await authorFolderForId(id);
+  if (!folderName) throw new Error(`Dossier auteur introuvable : ${id}`);
+  const folder = join(libraryRoot, folderName);
   const current = (await readJson<AuthorJson>(join(folder, "author.json"))) || {};
   await writeFile(join(folder, "author.json"), JSON.stringify({ ...current, image }, null, 2) + "\n");
+  const previousImage = current.image;
+  if (previousImage?.startsWith("/biblio/")) {
+    const libraryPath = resolve(process.cwd(), "public", decodeURIComponent(previousImage.slice(1)));
+    const authorRoot = resolve(folder);
+    if (libraryPath.startsWith(`${authorRoot}/`)) {
+      await unlink(libraryPath).catch(() => undefined);
+    }
+  }
 }
 
 export async function removeAuthorFolder(id: string) {
-  await rm(join(libraryRoot, id), { recursive: true, force: true });
+  const folderName = await authorFolderForId(id);
+  if (folderName) await rm(join(libraryRoot, folderName), { recursive: true, force: true });
 }

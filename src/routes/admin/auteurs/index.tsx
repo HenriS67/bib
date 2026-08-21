@@ -74,16 +74,22 @@ export default component$(() => {
     form.append("kind", "author");
     form.append("authorId", authorId);
     form.append("file", file);
-    const response = await fetch("/api/admin/upload", {
-      method: "POST",
-      body: form,
-    });
-    const result = await response.json();
-    if (response.ok)
+    try {
+      const response = await fetch("/api/admin/upload", {
+        method: "POST",
+        body: form,
+      });
+      const result = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!response.ok || !result.url) {
+        uploadMessage.value = result.error || `Upload impossible (${response.status})`;
+        return;
+      }
       authorImages.value = { ...authorImages.value, [authorId]: result.url };
-    uploadMessage.value = response.ok
-      ? "Image de l'auteur mise à jour"
-      : result.error || "Upload impossible";
+      uploadMessage.value = "Image de l'auteur mise à jour";
+    } catch (error) {
+      console.error("Erreur changement image auteur:", error);
+      uploadMessage.value = "Le serveur est inaccessible pendant l'upload";
+    }
     input.value = "";
   });
   const authorsById = new Map<
