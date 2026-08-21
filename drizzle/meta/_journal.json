@@ -15,6 +15,13 @@
       "when": 1787241549384,
       "tag": "0001_serious_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787320797344,
+      "tag": "0002_woozy_sentry",
+      "breakpoints": true
     }
   ]
 }
