@@ -1,21 +1,12 @@
-import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
-import postgres from "postgres";
 
 const sourceRoot = join(process.cwd(), process.argv[2] || "public/biblio");
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL est requis dans le fichier .env");
-}
 
 if (!existsSync(sourceRoot)) {
   throw new Error(`Dossier introuvable : ${sourceRoot}`);
 }
-
-const sql = postgres(databaseUrl, { prepare: false });
 
 function slugify(value) {
   return value
@@ -77,9 +68,6 @@ if (authorFolders.length === 0) {
   throw new Error("Aucun dossier d'auteur trouvé dans le dossier indiqué");
 }
 
-console.log("Vidage de la base de données...");
-await sql`TRUNCATE TABLE books, authors RESTART IDENTITY CASCADE`;
-
 let importedAuthors = 0;
 let importedBooks = 0;
 let skippedBooks = 0;
@@ -97,10 +85,6 @@ for (const authorFolder of authorFolders) {
   const authorId = slugify(authorFolder.name);
   const authorName = authorInfo.nom;
 
-  await sql`
-    INSERT INTO authors (id)
-    VALUES (${authorId})
-  `;
   importedAuthors += 1;
 
   const bookFolders = findBookFolders(authorPath);
@@ -125,18 +109,12 @@ for (const authorFolder of authorFolders) {
       suffix += 1;
     }
     usedBookIds.add(bookId);
-    // encodeURI (et non encodeURIComponent) laisse la virgule intacte, ce que le serveur statique de Vite exige.
-    await sql`
-      INSERT INTO books (id, author_id)
-      VALUES (${bookId}, ${authorId})
-    `;
     importedBooks += 1;
   }
 
-  console.log(`Auteur importé : ${authorName} (${bookFolders.length} livre(s))`);
+  console.log(`Auteur vérifié : ${authorName} (${bookFolders.length} livre(s))`);
 }
 
-await sql.end();
 console.log(
-  `Terminé : ${importedAuthors} auteur(s) et ${importedBooks} livre(s) importé(s), ${skippedBooks} ignoré(s).`,
+  `Terminé : ${importedAuthors} auteur(s) et ${importedBooks} livre(s) vérifié(s), ${skippedBooks} ignoré(s).`,
 );

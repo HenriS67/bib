@@ -1,22 +1,13 @@
-import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
-import postgres from "postgres";
 
 const sourceRoot = resolve(process.argv[2] || "");
 const destinationRoot = resolve("public/books");
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL est requis dans le fichier .env");
-}
 
 if (!process.argv[2] || !existsSync(sourceRoot)) {
   throw new Error("Utilisation : pnpm db:import-pdfs /chemin/vers/bibliotheque");
 }
-
-const sql = postgres(databaseUrl, { prepare: false });
 
 function slugify(value) {
   return value
@@ -58,25 +49,13 @@ for (const authorFolder of authorFolders) {
     (entry) => entry.isFile() && extname(entry.name).toLowerCase() === ".pdf",
   );
 
-  await sql`
-    INSERT INTO authors (id)
-    VALUES (${authorId})
-    ON CONFLICT (id) DO NOTHING
-  `;
-
   for (const pdfFile of pdfFiles) {
     const title = basename(pdfFile.name, extname(pdfFile.name)).replace(/[_-]+/g, " ");
-    const bookId = `${authorId}-${slugify(title)}`;
     const outputDirectory = join(destinationRoot, authorId);
     const outputName = `${slugify(title)}.pdf`;
     const outputPath = join(outputDirectory, outputName);
-    const pdfUrl = `/books/${authorId}/${outputName}`;
 
-    const existing = await sql`
-      SELECT id FROM books WHERE id = ${bookId}
-    `;
-
-    if (existing.length > 0) {
+    if (existsSync(outputPath)) {
       skipped += 1;
       continue;
     }
@@ -84,12 +63,9 @@ for (const authorFolder of authorFolders) {
     mkdirSync(outputDirectory, { recursive: true });
     cpSync(join(authorPath, pdfFile.name), outputPath);
 
-    await sql`INSERT INTO books (id, author_id) VALUES (${bookId}, ${authorId})`;
-
     imported += 1;
     console.log(`Ajouté : ${authorName} / ${title}`);
   }
 }
 
-await sql.end();
 console.log(`Terminé : ${imported} livre(s) ajouté(s), ${skipped} déjà présent(s).`);
