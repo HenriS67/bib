@@ -3,15 +3,27 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
-const databaseUrl = process.env.DATABASE_URL;
+type Database = ReturnType<typeof drizzle<typeof schema>>;
+let database: Database | undefined;
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required to use the PostgreSQL data layer");
+function getDatabase() {
+  if (database) return database;
+
+  const databaseUrl = process.env.DATABASE_URL ?? process.env.DATABASE_URL_UNPOOLED;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL or DATABASE_URL_UNPOOLED is required to use the PostgreSQL data layer");
+  }
+
+  const client = postgres(databaseUrl, {
+    max: 5,
+    prepare: false,
+  });
+  database = drizzle(client, { schema });
+  return database;
 }
 
-const client = postgres(databaseUrl, {
-  max: 5,
-  prepare: false,
+export const db = new Proxy({} as Database, {
+  get(_target, property) {
+    return Reflect.get(getDatabase(), property);
+  },
 });
-
-export const db = drizzle(client, { schema });

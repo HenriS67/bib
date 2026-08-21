@@ -11,7 +11,7 @@
     "build": "qwik build",
     "build.client": "vite build",
     "build.preview": "vite build --ssr src/entry.preview.tsx",
-    "build.server": "qwik check-client src dist && vite build -c adapters/vercel-edge/vite.config.ts",
+    "build.server": "qwik check-client src dist && vite build -c adapters/vercel/vite.config.ts && node scripts/configure-vercel-output.mjs",
     "build.types": "tsc --incremental --noEmit",
     "db:clear": "node scripts/clear-database.mjs",
     "db:generate": "drizzle-kit generate",
