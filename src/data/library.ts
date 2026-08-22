@@ -71,7 +71,15 @@ async function findBookFolders(dir: string): Promise<Array<{ dir: string; pdfNam
 }
 
 export async function readLibrary() {
-  const authorEntries = await readdir(libraryRoot, { withFileTypes: true });
+  let authorEntries;
+  try {
+    authorEntries = await readdir(libraryRoot, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { authors: [], books: [] };
+    }
+    throw error;
+  }
   const authors: LibraryAuthor[] = [];
   const books: LibraryBook[] = [];
 

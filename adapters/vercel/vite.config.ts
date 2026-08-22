@@ -10,5 +10,8 @@ export default extendConfig(baseConfig, () => ({
     },
     outDir: ".vercel/output/functions/_qwik-city.func",
   },
+  ssr: {
+    noExternal: ["drizzle-orm", "postgres", "undici"],
+  },
   plugins: [nodeServerAdapter()],
 }));
