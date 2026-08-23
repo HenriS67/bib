@@ -1,4 +1,4 @@
-import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 function getR2Client() {
   const endpoint = process.env.R2_ENDPOINT;
@@ -68,4 +68,11 @@ export async function getR2ObjectText(key: string) {
     if ((error as { name?: string }).name === "NoSuchKey") return null;
     throw error;
   }
+}
+
+export async function deleteR2Keys(keys: string[]) {
+  const bucket = process.env.R2_BUCKET;
+  if (!bucket) throw new Error("R2_BUCKET manquant");
+
+  await Promise.all(keys.map((key) => getR2Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))));
 }

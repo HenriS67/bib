@@ -92,22 +92,7 @@ export default component$(() => {
     }
     input.value = "";
   });
-  const authorsById = new Map<
-    string,
-    { id: string; name: string; image: string; bookCount: number }
-  >();
-  for (const row of loaded.value) {
-    const current = authorsById.get(row.id);
-    if (current) current.bookCount += row.bookCount ? 1 : 0;
-    else
-      authorsById.set(row.id, {
-        id: row.id,
-        name: row.name,
-        image: row.image,
-        bookCount: row.bookCount ? 1 : 0,
-      });
-  }
-  const authorList = useSignal([...authorsById.values()]);
+  const authorList = useSignal([...loaded.value]);
   const editingAuthor = useSignal<string | null>(null);
   const authorNames = useSignal<Record<string, string>>(
     Object.fromEntries(

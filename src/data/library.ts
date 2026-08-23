@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { getR2ObjectText, listR2Keys, r2PublicUrl, uploadTextToR2 } from "~/lib/r2";
+import { deleteR2Keys, getR2ObjectText, listR2Keys, r2PublicUrl, uploadTextToR2 } from "~/lib/r2";
 
 const libraryRoot = join(process.cwd(), "public", "biblio");
 
@@ -50,6 +50,21 @@ function nameFromFolder(folder: string) {
 
 function r2AssetUrl(url: string) {
   return url.startsWith("/biblio/") ? r2PublicUrl(url.slice(1)) || url : url;
+}
+
+async function getR2Catalog() {
+  const text = await getR2ObjectText("biblio/catalog.json");
+  if (!text) throw new Error("Catalogue R2 introuvable");
+  return JSON.parse(text) as R2Catalog;
+}
+
+async function saveR2Catalog(catalog: R2Catalog) {
+  await uploadTextToR2("biblio/catalog.json", `${JSON.stringify(catalog, null, 2)}\n`);
+}
+
+function r2KeyFromCatalogUrl(url: string) {
+  if (!url.startsWith("/biblio/")) throw new Error(`URL de livre R2 invalide : ${url}`);
+  return url.slice(1);
 }
 
 async function authorFolderForId(id: string) {
@@ -215,32 +230,124 @@ async function findBookFolder(id: string) {
 }
 
 export async function updateBookJson(id: string, data: Pick<BookJson, "titre" | "origine" | "nombre_pages">) {
-  const folder = await findBookFolder(id);
-  if (!folder) return false;
-  const current = (await readJson<BookJson>(join(folder, "book.json"))) || {};
-  await writeFile(join(folder, "book.json"), JSON.stringify({ ...current, ...data }, null, 2) + "\n");
+  try {
+    const folder = await findBookFolder(id);
+    if (!folder) return false;
+    const current = (await readJson<BookJson>(join(folder, "book.json"))) || {};
+    await writeFile(join(folder, "book.json"), JSON.stringify({ ...current, ...data }, null, 2) + "\n");
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const catalog = await getR2Catalog();
+  const book = catalog.books.find((item) => item.id === id);
+  if (!book) return false;
+  const pdfKey = r2KeyFromCatalogUrl(book.pdfUrl);
+  const bookJsonKey = `${pdfKey.slice(0, pdfKey.lastIndexOf("/"))}/book.json`;
+  const current = JSON.parse((await getR2ObjectText(bookJsonKey)) || "{}") as BookJson;
+  await uploadTextToR2(bookJsonKey, `${JSON.stringify({ ...current, ...data }, null, 2)}\n`);
+  Object.assign(book, { title: data.titre, origin: data.origine || "Monsieur Leroux", pages: data.nombre_pages || 0 });
+  await saveR2Catalog(catalog);
   return true;
 }
 
+export async function addBookToR2(
+  authorId: string,
+  authorFolder: string,
+  title: string,
+  origin: string,
+  pages: number,
+  fileName: string,
+) {
+  const authorJson = JSON.parse((await getR2ObjectText(`biblio/${authorFolder}/author.json`)) || "{}") as AuthorJson;
+  if (!authorJson.nom) throw new Error(`Auteur R2 introuvable : ${authorId}`);
+  const bookFolder = slugify(title);
+  const pdfUrl = `/biblio/${authorFolder}/${bookFolder}/${fileName}`;
+  const bookJson: BookJson = {
+    titre: title,
+    origine: origin || "Monsieur Leroux",
+    nombre_pages: pages || 0,
+    fichier_original: fileName,
+  };
+  await uploadTextToR2(`biblio/${authorFolder}/${bookFolder}/book.json`, `${JSON.stringify(bookJson, null, 2)}\n`);
+
+  const catalog = await getR2Catalog();
+  const book: LibraryBook = {
+    id: `${authorId}-${bookFolder}`,
+    title,
+    origin: bookJson.origine || "Monsieur Leroux",
+    authorId,
+    pages: bookJson.nombre_pages || 0,
+    pdfUrl,
+    authorName: authorJson.nom,
+  };
+  catalog.books = [...catalog.books.filter((item) => item.id !== book.id), book];
+  catalog.authors = catalog.authors.map((author) => author.id === authorId
+    ? { ...author, bookCount: catalog.books.filter((item) => item.authorId === authorId).length }
+    : author,
+  );
+  await saveR2Catalog(catalog);
+  return book;
+}
+
 export async function removeBookFolder(id: string) {
-  const folder = await findBookFolder(id);
-  if (!folder) return false;
-  await rm(folder, { recursive: true, force: true });
+  try {
+    const folder = await findBookFolder(id);
+    if (!folder) return false;
+    await rm(folder, { recursive: true, force: true });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const catalog = await getR2Catalog();
+  const book = catalog.books.find((item) => item.id === id);
+  if (!book) return false;
+  const pdfKey = r2KeyFromCatalogUrl(book.pdfUrl);
+  const bookPrefix = `${pdfKey.slice(0, pdfKey.lastIndexOf("/"))}/`;
+  await deleteR2Keys(await listR2Keys(bookPrefix));
+  catalog.books = catalog.books.filter((item) => item.id !== id);
+  catalog.authors = catalog.authors.map((author) => author.id === book.authorId ? { ...author, bookCount: Math.max(0, author.bookCount - 1) } : author);
+  await saveR2Catalog(catalog);
   return true;
 }
 
 export async function createAuthorFolder(id: string, name: string) {
-  const folder = join(libraryRoot, id);
-  await mkdir(folder, { recursive: true });
-  await writeFile(join(folder, "author.json"), JSON.stringify({ nom: name, image: "/favicon.svg" }, null, 2) + "\n");
+  try {
+    const folder = join(libraryRoot, id);
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "author.json"), JSON.stringify({ nom: name, image: "/favicon.svg" }, null, 2) + "\n");
+    return;
+  } catch (error) {
+    if (!["ENOENT", "EROFS"].includes((error as NodeJS.ErrnoException).code || "")) throw error;
+  }
+
+  await uploadTextToR2(`biblio/${id}/author.json`, `${JSON.stringify({ nom: name, image: "/favicon.svg" }, null, 2)}\n`);
+  const catalog = await getR2Catalog();
+  catalog.authors.push({ id, name, image: "/favicon.svg", bookCount: 0 });
+  await saveR2Catalog(catalog);
 }
 
 export async function updateAuthorJson(id: string, name: string) {
-  const folderName = await authorFolderForId(id);
+  const folderName = await findAuthorFolder(id);
   if (!folderName) throw new Error(`Dossier auteur introuvable : ${id}`);
-  const folder = join(libraryRoot, folderName);
-  const current = (await readJson<AuthorJson>(join(folder, "author.json"))) || {};
-  await writeFile(join(folder, "author.json"), JSON.stringify({ ...current, nom: name }, null, 2) + "\n");
+  try {
+    const folder = join(libraryRoot, folderName);
+    const current = (await readJson<AuthorJson>(join(folder, "author.json"))) || {};
+    await writeFile(join(folder, "author.json"), JSON.stringify({ ...current, nom: name }, null, 2) + "\n");
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const authorJsonKey = `biblio/${folderName}/author.json`;
+  const current = JSON.parse((await getR2ObjectText(authorJsonKey)) || "{}") as AuthorJson;
+  await uploadTextToR2(authorJsonKey, `${JSON.stringify({ ...current, nom: name }, null, 2)}\n`);
+  const catalog = await getR2Catalog();
+  catalog.authors = catalog.authors.map((author) => author.id === id ? { ...author, name } : author);
+  catalog.books = catalog.books.map((book) => book.authorId === id ? { ...book, authorName: name } : book);
+  await saveR2Catalog(catalog);
 }
 
 export async function updateAuthorImageJson(id: string, image: string) {
@@ -276,6 +383,18 @@ export async function updateAuthorImageJson(id: string, image: string) {
 }
 
 export async function removeAuthorFolder(id: string) {
-  const folderName = await authorFolderForId(id);
-  if (folderName) await rm(join(libraryRoot, folderName), { recursive: true, force: true });
+  const folderName = await findAuthorFolder(id);
+  if (!folderName) return;
+  try {
+    await rm(join(libraryRoot, folderName), { recursive: true, force: true });
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  await deleteR2Keys(await listR2Keys(`biblio/${folderName}/`));
+  const catalog = await getR2Catalog();
+  catalog.authors = catalog.authors.filter((author) => author.id !== id);
+  catalog.books = catalog.books.filter((book) => book.authorId !== id);
+  await saveR2Catalog(catalog);
 }

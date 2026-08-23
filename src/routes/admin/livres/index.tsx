@@ -97,6 +97,15 @@ export default component$(() => {
     uploadData.append("kind", "book");
     uploadData.append("authorId", authorId);
     uploadData.append("file", file);
+    const formData = new FormData(form);
+    const title = String(formData.get("title") || "").trim();
+    if (!title) {
+      uploadMessage.value = "Indiquez un titre";
+      return;
+    }
+    uploadData.append("title", title);
+    uploadData.append("origin", String(formData.get("origin") || "Monsieur Leroux"));
+    uploadData.append("pages", String(formData.get("pages") || 0));
     const response = await fetch("/api/admin/upload", {
       method: "POST",
       body: uploadData,
@@ -104,11 +113,6 @@ export default component$(() => {
     const result = await response.json();
     if (!response.ok) {
       uploadMessage.value = result.error || "Upload impossible";
-      return;
-    }
-    const title = String(new FormData(form).get("title") || "").trim();
-    if (!title) {
-      uploadMessage.value = "Indiquez un titre";
       return;
     }
     const id = `${authorId}-${title

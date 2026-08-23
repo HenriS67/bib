@@ -1,5 +1,5 @@
 import type { RequestHandler } from "@builder.io/qwik-city";
-import { findAuthorFolder, updateAuthorImageJson } from "~/data/library";
+import { addBookToR2, findAuthorFolder, updateAuthorImageJson } from "~/data/library";
 import { isAdmin } from "~/lib/admin-auth";
 import { r2PublicUrl, uploadToR2 } from "~/lib/r2";
 
@@ -34,6 +34,8 @@ export const onPost: RequestHandler = async ({ request, send }) => {
   const isAuthorImage = formData.get("kind") === "author";
   const authorId = String(formData.get("authorId") || "").trim();
   const title = String(formData.get("title") || "").trim();
+  const origin = String(formData.get("origin") || "Monsieur Leroux").trim();
+  const pages = Number(formData.get("pages") || 0);
 
   if (!(file instanceof File) || file.size === 0) {
     sendJson(send, 400, { error: "Fichier manquant" });
@@ -90,6 +92,10 @@ export const onPost: RequestHandler = async ({ request, send }) => {
 
   if (isAuthorImage && authorId) {
     await updateAuthorImageJson(authorId, publicUrl);
+  } else if (authorId && title) {
+    const authorFolder = await findAuthorFolder(authorId);
+    if (!authorFolder) throw new Error(`Dossier auteur introuvable : ${authorId}`);
+    await addBookToR2(authorId, authorFolder, title, origin, pages, fileName);
   }
 
   sendJson(send, 200, { url: publicUrl });
