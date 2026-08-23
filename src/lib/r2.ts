@@ -33,6 +33,10 @@ export async function uploadToR2(key: string, body: Uint8Array, contentType: str
   }));
 }
 
+export async function uploadTextToR2(key: string, text: string) {
+  await uploadToR2(key, new TextEncoder().encode(text), "application/json; charset=utf-8");
+}
+
 export async function listR2Keys(prefix: string) {
   const bucket = process.env.R2_BUCKET;
   if (!bucket) throw new Error("R2_BUCKET manquant");

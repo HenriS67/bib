@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { getR2ObjectText, listR2Keys, r2PublicUrl } from "~/lib/r2";
+import { getR2ObjectText, listR2Keys, r2PublicUrl, uploadTextToR2 } from "~/lib/r2";
 
 const libraryRoot = join(process.cwd(), "public", "biblio");
 
@@ -57,6 +57,19 @@ async function authorFolderForId(id: string) {
   return entries.find(
     (entry) => entry.isDirectory() && slugify(entry.name) === id.toLowerCase(),
   )?.name;
+}
+
+export async function findAuthorFolder(id: string) {
+  try {
+    return await authorFolderForId(id);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const authorJsonKeys = (await listR2Keys("biblio/")).filter((key) => key.endsWith("/author.json"));
+  return authorJsonKeys
+    .map((key) => key.slice("biblio/".length, -"/author.json".length))
+    .find((folder) => slugify(folder) === id.toLowerCase());
 }
 
 async function readJson<T>(filePath: string): Promise<T | null> {
@@ -231,19 +244,35 @@ export async function updateAuthorJson(id: string, name: string) {
 }
 
 export async function updateAuthorImageJson(id: string, image: string) {
-  const folderName = await authorFolderForId(id);
+  const folderName = await findAuthorFolder(id);
   if (!folderName) throw new Error(`Dossier auteur introuvable : ${id}`);
-  const folder = join(libraryRoot, folderName);
-  const current = (await readJson<AuthorJson>(join(folder, "author.json"))) || {};
-  await writeFile(join(folder, "author.json"), JSON.stringify({ ...current, image }, null, 2) + "\n");
-  const previousImage = current.image;
-  if (previousImage?.startsWith("/biblio/")) {
-    const libraryPath = resolve(process.cwd(), "public", decodeURIComponent(previousImage.slice(1)));
-    const authorRoot = resolve(folder);
-    if (libraryPath.startsWith(`${authorRoot}/`)) {
-      await unlink(libraryPath).catch(() => undefined);
+
+  try {
+    const folder = join(libraryRoot, folderName);
+    const current = (await readJson<AuthorJson>(join(folder, "author.json"))) || {};
+    await writeFile(join(folder, "author.json"), JSON.stringify({ ...current, image }, null, 2) + "\n");
+    const previousImage = current.image;
+    if (previousImage?.startsWith("/biblio/")) {
+      const libraryPath = resolve(process.cwd(), "public", decodeURIComponent(previousImage.slice(1)));
+      const authorRoot = resolve(folder);
+      if (libraryPath.startsWith(`${authorRoot}/`)) {
+        await unlink(libraryPath).catch(() => undefined);
+      }
     }
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
+
+  const authorJsonKey = `biblio/${folderName}/author.json`;
+  const current = JSON.parse((await getR2ObjectText(authorJsonKey)) || "{}") as AuthorJson;
+  await uploadTextToR2(authorJsonKey, `${JSON.stringify({ ...current, image }, null, 2)}\n`);
+
+  const catalogText = await getR2ObjectText("biblio/catalog.json");
+  if (!catalogText) return;
+  const catalog = JSON.parse(catalogText) as R2Catalog;
+  catalog.authors = catalog.authors.map((author) => author.id === id ? { ...author, image } : author);
+  await uploadTextToR2("biblio/catalog.json", `${JSON.stringify(catalog, null, 2)}\n`);
 }
 
 export async function removeAuthorFolder(id: string) {

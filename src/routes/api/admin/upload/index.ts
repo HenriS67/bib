@@ -1,7 +1,5 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { RequestHandler } from "@builder.io/qwik-city";
-import { updateAuthorImageJson } from "~/data/library";
+import { findAuthorFolder, updateAuthorImageJson } from "~/data/library";
 import { isAdmin } from "~/lib/admin-auth";
 import { r2PublicUrl, uploadToR2 } from "~/lib/r2";
 
@@ -36,8 +34,6 @@ export const onPost: RequestHandler = async ({ request, send }) => {
   const isAuthorImage = formData.get("kind") === "author";
   const authorId = String(formData.get("authorId") || "").trim();
   const title = String(formData.get("title") || "").trim();
-  const origin = String(formData.get("origin") || "Monsieur Leroux").trim();
-  const pages = Number(formData.get("pages") || 0);
 
   if (!(file instanceof File) || file.size === 0) {
     sendJson(send, 400, { error: "Fichier manquant" });
@@ -61,52 +57,36 @@ export const onPost: RequestHandler = async ({ request, send }) => {
   }
 
   const fileName = `${Date.now()}-${safeName(file.name)}`;
-  let directory = join(process.cwd(), "public", "books");
-  let publicUrl = `/books/${fileName}`;
+  let publicUrl = "";
   let r2Key = "";
 
   if (isAuthorImage && authorId) {
-    const authorFolders = await readdir(join(process.cwd(), "public", "biblio"), { withFileTypes: true });
-    const authorFolder = authorFolders.find((entry) => entry.isDirectory() && slugify(entry.name) === authorId);
+    const authorFolder = await findAuthorFolder(authorId);
     if (!authorFolder) {
       sendJson(send, 404, { error: "Dossier biblio de l'auteur introuvable" });
       return;
     }
-    directory = join(process.cwd(), "public", "biblio", authorFolder.name);
-    publicUrl = `/biblio/${encodeURI(authorFolder.name)}/${encodeURI(fileName)}`;
+    r2Key = `biblio/${authorFolder}/${fileName}`;
   } else if (isAuthorImage) {
-    directory = join(process.cwd(), "public", "authors");
-    publicUrl = `/authors/${fileName}`;
+    sendJson(send, 400, { error: "Auteur manquant" });
+    return;
   } else if (authorId && title) {
-    const authorFolders = await readdir(join(process.cwd(), "public", "biblio"), { withFileTypes: true });
-    const authorFolder = authorFolders.find((entry) => entry.isDirectory() && slugify(entry.name) === authorId);
+    const authorFolder = await findAuthorFolder(authorId);
     if (!authorFolder) {
       sendJson(send, 404, { error: "Dossier biblio de l'auteur introuvable" });
       return;
     }
     const bookFolder = slugify(title);
-    directory = join(process.cwd(), "public", "biblio", authorFolder.name, bookFolder);
-    publicUrl = `/biblio/${encodeURI(authorFolder.name)}/${encodeURI(bookFolder)}/${encodeURI(fileName)}`;
-    r2Key = `biblio/${authorFolder.name}/${bookFolder}/${fileName}`;
+    r2Key = `biblio/${authorFolder}/${bookFolder}/${fileName}`;
   }
 
   const fileBytes = new Uint8Array(await file.arrayBuffer());
-  if (!isAuthorImage && r2Key) {
-    await uploadToR2(r2Key, fileBytes, "application/pdf");
-    publicUrl = r2PublicUrl(r2Key) || publicUrl;
-  } else {
-    await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, fileName), fileBytes);
+  if (!r2Key) {
+    sendJson(send, 400, { error: "Informations du livre manquantes" });
+    return;
   }
-
-  if (!isAuthorImage && authorId && title) {
-    await writeFile(join(directory, "book.json"), JSON.stringify({
-      titre: title,
-      origine: origin,
-      nombre_pages: pages,
-      fichier_original: fileName,
-    }, null, 2) + "\n");
-  }
+  await uploadToR2(r2Key, fileBytes, isAuthorImage ? file.type : "application/pdf");
+  publicUrl = r2PublicUrl(r2Key) || `/biblio/${r2Key.slice("biblio/".length).split("/").map(encodeURI).join("/")}`;
 
   if (isAuthorImage && authorId) {
     await updateAuthorImageJson(authorId, publicUrl);
