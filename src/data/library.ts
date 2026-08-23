@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { r2PublicUrl } from "~/lib/r2";
+import { listR2Keys, r2PublicUrl } from "~/lib/r2";
 
 const libraryRoot = join(process.cwd(), "public", "biblio");
 
@@ -39,6 +39,10 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function nameFromFolder(folder: string) {
+  return folder.replace(/[-_]+/g, " ").trim();
+}
+
 async function authorFolderForId(id: string) {
   const entries = await readdir(libraryRoot, { withFileTypes: true });
   return entries.find(
@@ -71,13 +75,51 @@ async function findBookFolders(dir: string): Promise<Array<{ dir: string; pdfNam
   return result;
 }
 
+async function readLibraryFromR2() {
+  const books: LibraryBook[] = [];
+  const authorsByFolder = new Map<string, LibraryAuthor>();
+  const keys = await listR2Keys("biblio/");
+
+  for (const key of keys) {
+    if (!key.toLowerCase().endsWith(".pdf")) continue;
+    const relativePath = key.slice("biblio/".length);
+    const pathParts = relativePath.split("/");
+    const authorFolder = pathParts.shift();
+    const pdfName = pathParts.pop();
+    if (!authorFolder || !pdfName) continue;
+
+    const authorId = slugify(authorFolder);
+    const bookFolder = pathParts.join("/") || pdfName.replace(/\.pdf$/i, "");
+    const title = nameFromFolder(bookFolder.split("/").at(-1) || pdfName.replace(/\.pdf$/i, ""));
+    const author = authorsByFolder.get(authorFolder) ?? {
+      id: authorId,
+      name: nameFromFolder(authorFolder),
+      image: "/favicon.svg",
+      bookCount: 0,
+    };
+    author.bookCount += 1;
+    authorsByFolder.set(authorFolder, author);
+    books.push({
+      id: `${authorId}-${slugify(bookFolder)}`,
+      title,
+      origin: "Monsieur Leroux",
+      authorId,
+      pages: 0,
+      pdfUrl: r2PublicUrl(key) || `/${key.split("/").map(encodeURI).join("/")}`,
+      authorName: author.name,
+    });
+  }
+
+  return { authors: [...authorsByFolder.values()], books };
+}
+
 export async function readLibrary() {
   let authorEntries;
   try {
     authorEntries = await readdir(libraryRoot, { withFileTypes: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { authors: [], books: [] };
+      return readLibraryFromR2();
     }
     throw error;
   }

@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 function getR2Client() {
   const endpoint = process.env.R2_ENDPOINT;
@@ -31,4 +31,24 @@ export async function uploadToR2(key: string, body: Uint8Array, contentType: str
     Body: body,
     ContentType: contentType,
   }));
+}
+
+export async function listR2Keys(prefix: string) {
+  const bucket = process.env.R2_BUCKET;
+  if (!bucket) throw new Error("R2_BUCKET manquant");
+
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const page = await getR2Client().send(new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+    keys.push(...(page.Contents ?? []).flatMap((object) => object.Key ? [object.Key] : []));
+    continuationToken = page.NextContinuationToken;
+  } while (continuationToken);
+
+  return keys;
 }
