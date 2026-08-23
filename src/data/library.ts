@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { listR2Keys, r2PublicUrl } from "~/lib/r2";
+import { getR2ObjectText, listR2Keys, r2PublicUrl } from "~/lib/r2";
 
 const libraryRoot = join(process.cwd(), "public", "biblio");
 
@@ -11,6 +11,11 @@ type BookJson = {
   origine?: string;
   nombre_pages?: number;
   fichier_original?: string;
+};
+
+type R2Catalog = {
+  authors: LibraryAuthor[];
+  books: LibraryBook[];
 };
 
 export type LibraryAuthor = {
@@ -41,6 +46,10 @@ function slugify(value: string) {
 
 function nameFromFolder(folder: string) {
   return folder.replace(/[-_]+/g, " ").trim();
+}
+
+function r2AssetUrl(url: string) {
+  return url.startsWith("/biblio/") ? r2PublicUrl(url.slice(1)) || url : url;
 }
 
 async function authorFolderForId(id: string) {
@@ -76,6 +85,21 @@ async function findBookFolders(dir: string): Promise<Array<{ dir: string; pdfNam
 }
 
 async function readLibraryFromR2() {
+  const catalogText = await getR2ObjectText("biblio/catalog.json");
+  if (catalogText) {
+    try {
+      const catalog = JSON.parse(catalogText) as R2Catalog;
+      if (Array.isArray(catalog.authors) && Array.isArray(catalog.books)) {
+        return {
+          authors: catalog.authors.map((author) => ({ ...author, image: r2AssetUrl(author.image) })),
+          books: catalog.books.map((book) => ({ ...book, pdfUrl: r2AssetUrl(book.pdfUrl) })),
+        };
+      }
+    } catch {
+      // A missing or invalid generated catalog falls back to the PDF hierarchy.
+    }
+  }
+
   const books: LibraryBook[] = [];
   const authorsByFolder = new Map<string, LibraryAuthor>();
   const keys = await listR2Keys("biblio/");
