@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 
 const functionDirectory = ".vercel/output/functions/_qwik-city.func";
 const outputConfigPath = ".vercel/output/config.json";
@@ -25,6 +25,7 @@ await writeFile(outputConfigPath, JSON.stringify(outputConfig, null, 2) + "\n");
 
 await mkdir(functionDirectory, { recursive: true });
 await mkdir(staticDirectory, { recursive: true });
+await cp("dist", staticDirectory, { recursive: true });
 for (const entry of await readdir("public", { withFileTypes: true })) {
   if (entry.isFile()) {
     await copyFile(`public/${entry.name}`, `${staticDirectory}/${entry.name}`);

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { RequestHandler } from "@builder.io/qwik-city";
 import { updateAuthorImageJson } from "~/data/library";
 import { isAdmin } from "~/lib/admin-auth";
+import { r2PublicUrl, uploadToR2 } from "~/lib/r2";
 
 function safeName(value: string) {
   return value
@@ -62,6 +63,7 @@ export const onPost: RequestHandler = async ({ request, send }) => {
   const fileName = `${Date.now()}-${safeName(file.name)}`;
   let directory = join(process.cwd(), "public", "books");
   let publicUrl = `/books/${fileName}`;
+  let r2Key = "";
 
   if (isAuthorImage && authorId) {
     const authorFolders = await readdir(join(process.cwd(), "public", "biblio"), { withFileTypes: true });
@@ -85,9 +87,17 @@ export const onPost: RequestHandler = async ({ request, send }) => {
     const bookFolder = slugify(title);
     directory = join(process.cwd(), "public", "biblio", authorFolder.name, bookFolder);
     publicUrl = `/biblio/${encodeURI(authorFolder.name)}/${encodeURI(bookFolder)}/${encodeURI(fileName)}`;
+    r2Key = `biblio/${authorFolder.name}/${bookFolder}/${fileName}`;
   }
-  await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, fileName), Buffer.from(await file.arrayBuffer()));
+
+  const fileBytes = new Uint8Array(await file.arrayBuffer());
+  if (!isAuthorImage && r2Key) {
+    await uploadToR2(r2Key, fileBytes, "application/pdf");
+    publicUrl = r2PublicUrl(r2Key) || publicUrl;
+  } else {
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, fileName), fileBytes);
+  }
 
   if (!isAuthorImage && authorId && title) {
     await writeFile(join(directory, "book.json"), JSON.stringify({

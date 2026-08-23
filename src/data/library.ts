@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { r2PublicUrl } from "~/lib/r2";
 
 const libraryRoot = join(process.cwd(), "public", "biblio");
 
@@ -110,7 +111,7 @@ export async function readLibrary() {
         origin: bookJson.origine || "Monsieur Leroux",
         authorId,
         pages: bookJson.nombre_pages || 0,
-        pdfUrl: `/biblio/${encodeURI(relativePath)}`,
+        pdfUrl: r2PublicUrl(`biblio/${relativePath}`) || `/biblio/${encodeURI(relativePath)}`,
         authorName: authorJson.nom,
       });
     }
