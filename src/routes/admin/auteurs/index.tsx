@@ -146,14 +146,13 @@ export default component$(() => {
               class="border border-[#1d211d] bg-[#fbfaf6] p-3"
             >
               <div class="flex items-center gap-3">
-                <form action="/api/admin/author-photo" method="post" enctype="multipart/form-data" class="flex h-14 w-11 shrink-0 flex-col overflow-hidden border border-[#1d211d]" title={`Changer l'image de ${author.name}`}>
+                <form action="/api/admin/author-photo" method="post" enctype="multipart/form-data" class="group relative block h-14 w-11 shrink-0 cursor-pointer overflow-hidden" title={`Changer l'image de ${author.name}`}>
                   <input type="hidden" name="authorId" value={author.id} />
-                  <label class="group relative block min-h-0 flex-1 cursor-pointer overflow-hidden" aria-label={`Choisir l'image de ${author.name}`}>
+                  <label class="block h-full cursor-pointer" aria-label={`Changer l'image de ${author.name}`}>
                     <img src={author.image} alt={`Portrait de ${author.name}`} width="44" height="56" class="h-full w-full object-cover transition group-hover:opacity-60" />
                     <span class="absolute inset-0 flex items-center justify-center bg-black/0 text-lg leading-none text-white opacity-0 transition group-hover:bg-black/45 group-hover:opacity-100">↻</span>
-                    <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required class="sr-only" />
+                    <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required class="sr-only" data-author-photo />
                   </label>
-                  <button type="submit" class="h-5 shrink-0 bg-[#1d211d] text-xs leading-none text-white hover:bg-[#3d493d]" title="Envoyer l'image" aria-label={`Envoyer l'image de ${author.name}`}>↑</button>
                 </form>
                 {editingAuthor.value === author.id ? (
                   <form
@@ -221,6 +220,7 @@ export default component$(() => {
           ))}
         </section>
       </div>
+      <script dangerouslySetInnerHTML={`document.addEventListener("change", (event) => { const input = event.target; if (input instanceof HTMLInputElement && input.matches("input[data-author-photo]") && input.files?.length) input.form?.requestSubmit(); });`} />
     </main>
   );
 });
